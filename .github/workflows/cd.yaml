@@ -1,0 +1,45 @@
+name: CD
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{github.workflow}}-${{github.ref}}
+
+jobs:
+  create-version-pr-or-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: setup node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+          cache: "npm"
+      - name: install dependencies
+        run: npm ci
+      - name: create version pr or Github Release
+        id: changesets
+        uses: changesets/action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.CHANGESET_TOKEN }}
+        with:
+          publish: npx changeset tag
+
+      - name: printing changeset output
+        run: echo "${{toJson(steps.changesets.outputs)}}"
+      - name: send a slack message
+        if: steps.changesets.outputs.pullRequestNumber
+        uses: slackapi/slack-github-action@v2.0.0
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            text: "Section"
+            blocks:
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: "go *<https://gihub.com/${{github.repository}}/pull/${{steps.changesets.outputs.pullRequestNumber}}|Version Pull Request>* was updated. Review it and merge it to create a new release and deployment"
