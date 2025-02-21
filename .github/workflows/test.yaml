@@ -1,0 +1,65 @@
+name: Test
+on:
+  workflow_call:
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: setup node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+          cache: "npm"
+      - name: install dependencies
+        run: npm ci
+      - name: check for formating errors
+        run: npm run format
+      - name: check for eslint erros
+        run: npm run lint
+      - name: check for type errors
+        run: npm run typecheck
+      - name: build
+        run: npm run build
+      - name: uploading the build output
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-output
+          path: next/
+      - name: npm run test
+        run: npm run test
+      - name: uploading test coverage reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-reports
+          path: coverage/
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+      - name: install playwright browsers
+        run: npx playwright install --with-deps
+      - name: end-2-end test
+        run: npm run test:e2e
+      - name: uploading e2e test coverage reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-coverage-reports
+          path: playwright-report/
+      - name: Post a message in a channel
+        if: failure()
+        uses: slackapi/slack-github-action@v2.0.0
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            text: "*GitHub Action build result*: ${{ job.status }}\n${{ github.event.pull_request.html_url || github.event.head_commit.url }}"
+            blocks:
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: "GitHub Action build result: ${{ job.status }}\n${{ github.event.pull_request.html_url || github.event.head_commit.url }}"
