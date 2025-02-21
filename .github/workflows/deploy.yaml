@@ -6,7 +6,7 @@ on:
         description: "AWS Elastic Beanstalk Environment"
         required: true
         type: string
-        defuault: first-app-staging
+        default: first-app-staging
       github-environment:
         description: GitHub environment
         required: true
@@ -47,10 +47,19 @@ jobs:
           cache: "npm"
       - name: install dependencies
         run: npm ci
+      - name: Create necessary environment variables
+        run: |
+          if [ "${{inputs.github-environment}}"=production]
+          then
+            echo "FLAGSMITH_KEY=${{secrets.FLAGSMITH_KEY_PRODUCTION}}" >> $GITHUB_ENV
+          else
+            echo "FLAGSMITH_KEY=${{secrets.FLAGSMITH_KEY_STAGING}}" >> $GITHUB_ENV
+          fi
+
       - name: Build app
         run: npm run build
         env:
-          FLAGSMITH_KEY: ${{ secrets.FLAGSMITH_KEY_STAGING }}
+          FLAGSMITH_KEY: $FLAGSMITH_KEY
       - name: cache EB CLI dependencies
         uses: actions/cache@v3
         with:
@@ -76,12 +85,6 @@ jobs:
       - name: Create a new environment
         if: steps.aws-env-name.outputs.result =='none' || steps.aws-env-status.outputs.result == 'Terminated'
         run: |
-          if [ "${{inputs.github-environment}}"=production]
-          then
-            echo FLAGSMITH_KEY=${{secrets.FLAGSMITH_KEY_PRODUCTION}}
-          else
-            echo FLAGSMITH_KEY=${{secrets.FLAGSMITH_KEY_STAGING}}
-          fi
           eb create ${{inputs.aws-environment}} --instance-types ${{vars.AWS_EB_ENV_INSTANCE_TYPES}} --envvars FLAGSMITH_KEY=$FLAGSMITH_KEY
       - name: Deploy if the environment exists
         run: eb deploy ${{inputs.aws-environment}}
