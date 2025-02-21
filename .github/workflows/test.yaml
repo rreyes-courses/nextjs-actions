@@ -2,6 +2,9 @@ name: Test
 on:
   workflow_call:
 
+env:
+  FLAGSMITH_KEY: ${{secrets.FLAGSMITH_KEY_STAGING}}
+
 jobs:
   test-and-build:
     runs-on: ubuntu-latest
@@ -40,8 +43,15 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
+      - name: caching playwright browsers
+        id: cache-playwright
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-browsers
       - name: install playwright browsers
-        run: npx playwright install --with-deps
+        if: steps.cache-playwright.outputs.cache-hit!= 'true'
+        run: npx playwright install
       - name: end-2-end test
         run: npm run test:e2e
       - name: uploading e2e test coverage reports
