@@ -43,7 +43,14 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
+      - name: caching playwright browsers
+        id: cache-playwright
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-browsers
       - name: install playwright browsers
+        if: steps.cache-playwright.outputs.cache-hit!= 'true'
         run: npx playwright install
       - name: end-2-end test
         run: npm run test:e2e
