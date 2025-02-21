@@ -6,7 +6,7 @@ export default async function Home() {
   const flags = await flagsmith.getEnvironmentFlags();
   return (
     <main className="main">
-      <div>
+<div>
         <h2>Hello World, I'm making this changes to test my workflows</h2>
       </div>
       <Link href="/about">About</Link>
