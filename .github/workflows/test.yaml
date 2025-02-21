@@ -2,6 +2,9 @@ name: Test
 on:
   workflow_call:
 
+env:
+  FLAGSMITH_KEY: ${{secrets.FLAGSMITH_KEY_STAGING}}
+
 jobs:
   test-and-build:
     runs-on: ubuntu-latest
