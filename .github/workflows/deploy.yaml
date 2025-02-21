@@ -1,0 +1,107 @@
+name: Deploy to aws
+on:
+  workflow_dispatch:
+    inputs:
+      aws-environment:
+        description: "AWS Elastic Beanstalk Environment"
+        required: true
+        type: string
+        defuault: first-app-staging
+      github-environment:
+        description: GitHub environment
+        required: true
+        type: string
+        default: staging
+  workflow_call:
+    inputs:
+      aws-environment:
+        description: "AWS Elastic Beanstalk Environment"
+        required: true
+        type: string
+        defuault: first-app-staging
+      github-environment:
+        description: GitHub environment
+        required: true
+        type: string
+        default: staging
+concurrency:
+  group: ${{github.workflow}}-${{github.ref}}-${{inputs.aws-environment}}-${{inputs.github-environment}}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      url: "https://${{ steps.aws-env-cname.outpus.result }}"
+    steps:
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{vars.AWS_REGION}}
+          aws-access-key-id: ${{secrets.AWS_ACCESS_KEY}}
+          aws-secret-access-key: ${{secrets.AWS_SECRET_ACCESS_KEY}}
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: setup node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+          cache: "npm"
+      - name: install dependencies
+        run: npm ci
+      - name: Build app
+        run: npm run build
+      - name: cache EB CLI dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: pip-cache-${{runner.os}}
+      - name: Install EB CLI
+        run: pip install awsebcli
+        id: eb-install
+      - name: Get AWS ENV Name
+        id: aws-env-name
+        run: |
+          echo "result=$(aws elasticbeanstalk describe-environments --application-name ${{vars.AWS_EB_APP_NAME}} --environment-names ${{inputs.aws-environment}} --query "Environments[0].EnvironmentName" --output text)" >> $GITHUB_OUTPUT
+      - name: Get AWS ENV Status
+        id: aws-env-status
+        run: |
+          echo "result=$(aws elasticbeanstalk describe-environments --application-name ${{vars.AWS_EB_APP_NAME}} --environment-names ${{inputs.aws-environment}} --query "Environments[0].status" --output text)" >> $GITHUB_OUTPUT
+      - name: print variables
+        run: |
+          echo ${{ steps.aws-env-name.outputs.result }}
+      - name: Initialize EB
+        run: |
+          eb init ${{ vars.AWS_EB_APP_NAME}} --region=${{vars.AWS_REGION}} --platform=${{vars.AWS_EB_PLATFORM}}
+      - name: Create a new environment
+        if: steps.aws-env-name.outputs.result =='none' || steps.aws-env-status.outputs.result == 'Terminated'
+        run: |
+          if [ "${{inputs.github-environment}}"=production]
+          then
+            echo FLAGSMITH_KEY=${{secrets.FLAGSMITH_KEY_PRODUCTION}}
+          else
+            echo FLAGSMITH_KEY=${{secrets.FLAGSMITH_KEY_STAGING}}
+          fi
+          eb create ${{inputs.aws-environment}} --instance-types ${{vars.AWS_EB_ENV_INSTANCE_TYPES}} --envvars FLAGSMITH_KEY=$FLAGSMITH_KEY
+      - name: Deploy if the environment exists
+        run: eb deploy ${{inputs.aws-environment}}
+      - name: Get AWS ENV CNAME
+        id: aws-env-cname
+        run: |
+          echo "result=$(aws elasticbeanstalk describe-environments --application-name ${{vars.AWS_EB_APP_NAME}} --environment-names ${{inputs.aws-environment}} --query "Environments[0].CNAME" --output text)" >> $GITHUB_OUTPUT
+      - name: Post a message in a channel
+        continue-on-error: true
+        uses: slackapi/slack-github-action@v2.0.0
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            text: "*GitHub Action build result*: ${{ job.status }}\n${{ github.event.pull_request.html_url || github.event.head_commit.url }}"
+            blocks:
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: "GitHub Action build result: ${{steps.aws-env-cname.outputs.result}}"
+      - name: Abort if cancel
+        if: cancelled() || steps.eb-install.conclusion=='success'
+        run: eb abort ${{inputs.aws-environment}}
