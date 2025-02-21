@@ -9,7 +9,8 @@ concurrency:
 jobs:
   create-version-pr-or-release:
     runs-on: ubuntu-latest
-
+    outputs:
+      should-deploy: ${{steps.changesets.outputs.hasChangesets == 'false'}}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -43,3 +44,41 @@ jobs:
                 text:
                   type: "mrkdwn"
                   text: "go *<https://gihub.com/${{github.repository}}/pull/${{steps.changesets.outputs.pullRequestNumber}}|Version Pull Request>* was updated. Review it and merge it to create a new release and deployment"
+      - name: set Release version
+        if: steps.changesets.outputs.published == 'true'
+        id: get-version
+        run: echo "version=${{fromJson(steps.changesets.outputs.publishedPackages)[0].version}}" >>$GITHUB_OUTPUT
+      - name: Send a Slack message when a new release is created
+        if: steps.changesets.outputs.published == 'true'
+        uses: slackapi/slack-github-action@v2.0.0
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+               "blocks":[
+                  "type": "Section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*<https://github.com/${{github.repository}}/releases/tag/v${{steps.get-version.outputs.version}}|Version ${{steps.get-version.outputs.version}}>* Released! Deployment should be in progress."
+                  }
+                ]
+            }
+  run-tests:
+    needs: create-version-pr-or-release
+    if: needs.create-version-pr-or-release.outputs.should-deploy == 'true'
+    uses: ./.github/workflows/test.yaml
+    secrets: inherit
+  deploy-to-staging:
+    needs: run-tests
+    uses: ./.github/workflows/deploy.yaml
+    with:
+      aws-environment: ${{vars.AWS_EB_STAGING_ENV}}
+      github-environment: "staging"
+    secrets: inherit
+  deploy-to-production:
+    needs: run-tests
+    uses: ./.github/workflows/deploy.yaml
+    with:
+      aws-environment: ${{vars.AWS_EB_PRODUCTION_ENV}}
+      github-environment: "production"
