@@ -12,6 +12,9 @@ on:
         required: true
         type: string
         default: staging
+      report-pr:
+        description: "Pr to add report comments to"
+        type: number
   workflow_call:
     inputs:
       aws-environment:
@@ -31,6 +34,8 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
     steps:
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -38,6 +43,21 @@ jobs:
           aws-region: ${{vars.AWS_REGION}}
           aws-access-key-id: ${{secrets.AWS_ACCESS_KEY}}
           aws-secret-access-key: ${{secrets.AWS_SECRET_ACCESS_KEY}}
+      - name: comment deployment in progross
+        if: inputs.report-pr
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const comment=`### Deployment in progress
+              [you can monitor the deployment here.](https://github.com/${{github.repository}}/actions/runs/${{github.run_id}})
+            `;
+            const response=github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: ${{inputs.report-pr }},
+              body: comment
+            })
+
       - name: Checkout
         uses: actions/checkout@v3
       - name: setup node
@@ -105,6 +125,20 @@ jobs:
                 text:
                   type: "mrkdwn"
                   text: "GitHub Action build result: ${{steps.aws-env-cname.outputs.result}}"
+      - name: update pull request success
+        if: inputs.report-pr && success()
+        continue-on-error: true
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const comment=`### Deployment completed successfully
+            you can vew the deployed environment here: http://${{steps.aws-env-cname.outputs.result}}`
+            github.res.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: ${{inputs.report-pr }},
+              body: comment
+            })
       - name: Abort if cancel
         if: cancelled() && steps.eb-install.conclusion=='success'
         run: eb abort ${{inputs.aws-environment}}

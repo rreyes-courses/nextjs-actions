@@ -74,6 +74,8 @@ jobs:
     secrets: inherit
   deploy-to-staging:
     needs: run-tests
+    permissions:
+      pull-requests: write
     uses: ./.github/workflows/deploy.yaml
     with:
       aws-environment: ${{vars.AWS_EB_STAGING_ENV}}
@@ -81,6 +83,8 @@ jobs:
     secrets: inherit
   deploy-to-production:
     needs: run-tests
+    permissions:
+      pull-requests: write
     uses: ./.github/workflows/deploy.yaml
     with:
       aws-environment: ${{vars.AWS_EB_PRODUCTION_ENV}}
