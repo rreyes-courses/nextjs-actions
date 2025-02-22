@@ -8,7 +8,7 @@ export default async function Home() {
     <main className="main">
       <div>
         <h2>Hello World</h2>
-        <p>adding new text</p>
+        <p>adding new text with an update</p>
       </div>
       <Link href="/about">About</Link>
       <br />

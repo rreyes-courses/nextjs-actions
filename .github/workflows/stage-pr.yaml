@@ -10,6 +10,8 @@ jobs:
       actions: write
     if: github.event.issue.pull_request && github.event.issue.state == 'open' && github.event.comment.body == '/deploy'
     steps:
+      - name: print value
+        run: echo ${{github.event.issue.number}}
       - name: Get pull request Head Ref
         id: get-head-ref
         uses: actions/github-script@v6
@@ -19,7 +21,7 @@ jobs:
             const response =await github.rest.pulls.get({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              pull_number: context.issue.pull_number,
+              pull_number: context.issue.number,
             })
             return response.data.head.ref
       - name: trigger a branch deploy
