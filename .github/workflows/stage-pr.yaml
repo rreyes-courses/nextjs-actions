@@ -10,6 +10,8 @@ jobs:
       actions: write
     if: github.event.issue.pull_request && github.event.issue.state == 'open' && github.event.comment.body == '/deploy'
     steps:
+      - name: print value
+        run: echo ${{github.event.issue.number}}
       - name: Get pull request Head Ref
         id: get-head-ref
         uses: actions/github-script@v6
