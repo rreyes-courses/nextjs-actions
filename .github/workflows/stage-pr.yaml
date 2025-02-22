@@ -19,7 +19,7 @@ jobs:
             const response =await github.rest.pulls.get({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              pull_number: ${{github.event.issue.number}},
+              pull_number: context.issue.pull_number,
             })
             return response.data.head.ref
       - name: trigger a branch deploy
