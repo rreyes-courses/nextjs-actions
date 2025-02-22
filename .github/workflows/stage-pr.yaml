@@ -32,7 +32,7 @@ jobs:
               workflow_id: "deploy.yaml",
               ref: ${{steps.get-head-ref.outputs.result}},
               inputs:{
-                "aws-environment": `github-actions-course-demo-pr-$`context.issue.number}`,
+                "aws-environment": `github-actions-course-demo-pr-${context.issue.number}`,
                 "github-environment": "staging",
                 "report-pr": `${context.issue.number}`
               }
